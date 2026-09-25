@@ -1,0 +1,240 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:account_name",
+ "creation": "2026-09-26 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "account_name",
+  "enabled",
+  "environment",
+  "column_break_1",
+  "company",
+  "receiving_account",
+  "mode_of_payment",
+  "shortcode_section",
+  "shortcode_type",
+  "business_shortcode",
+  "till_number",
+  "credentials_section",
+  "consumer_key",
+  "consumer_secret",
+  "passkey",
+  "verification_section",
+  "initiator_name",
+  "security_credential",
+  "c2b_section",
+  "c2b_validation",
+  "c2b_registered_on",
+  "c2b_register_response",
+  "callback_token",
+  "callback_token_hash"
+ ],
+ "fields": [
+  {
+   "description": "For example: Main Paybill",
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "label": "Account Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "default": "Sandbox",
+   "fieldname": "environment",
+   "fieldtype": "Select",
+   "label": "Environment",
+   "options": "Sandbox\nProduction",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "description": "Where M-Pesa receipts are posted. Defaults to the M-Pesa Mode of Payment's account.",
+   "fieldname": "receiving_account",
+   "fieldtype": "Link",
+   "label": "Receiving Ledger",
+   "options": "Account"
+  },
+  {
+   "default": "M-Pesa",
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Link",
+   "label": "Mode of Payment",
+   "options": "Mode of Payment",
+   "reqd": 1
+  },
+  {
+   "fieldname": "shortcode_section",
+   "fieldtype": "Section Break",
+   "label": "Shortcode"
+  },
+  {
+   "default": "Paybill",
+   "fieldname": "shortcode_type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Paybill\nTill",
+   "reqd": 1
+  },
+  {
+   "description": "The Paybill number, or for a Till the store (head office) number.",
+   "fieldname": "business_shortcode",
+   "fieldtype": "Data",
+   "label": "Business Shortcode",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.shortcode_type=='Till'",
+   "fieldname": "till_number",
+   "fieldtype": "Data",
+   "label": "Till Number",
+   "mandatory_depends_on": "eval:doc.shortcode_type=='Till'"
+  },
+  {
+   "description": "From your own app on developer.safaricom.co.ke (Go-Live approved for Production).",
+   "fieldname": "credentials_section",
+   "fieldtype": "Section Break",
+   "label": "Daraja API credentials"
+  },
+  {
+   "fieldname": "consumer_key",
+   "fieldtype": "Password",
+   "label": "Consumer Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "consumer_secret",
+   "fieldtype": "Password",
+   "label": "Consumer Secret",
+   "reqd": 1
+  },
+  {
+   "description": "Needed to send payment prompts (STK Push).",
+   "fieldname": "passkey",
+   "fieldtype": "Password",
+   "label": "STK Passkey"
+  },
+  {
+   "description": "Lets Royce confirm each Paybill/Till payment with Safaricom before posting it. Without these, those payments wait for review.",
+   "fieldname": "verification_section",
+   "fieldtype": "Section Break",
+   "label": "Payment verification"
+  },
+  {
+   "description": "An API operator created on the M-Pesa org portal.",
+   "fieldname": "initiator_name",
+   "fieldtype": "Data",
+   "label": "Initiator Name"
+  },
+  {
+   "description": "The initiator's password, encrypted on the Daraja portal.",
+   "fieldname": "security_credential",
+   "fieldtype": "Password",
+   "label": "Security Credential",
+   "length": 1024
+  },
+  {
+   "fieldname": "c2b_section",
+   "fieldtype": "Section Break",
+   "label": "Paybill/Till payments (C2B)"
+  },
+  {
+   "default": "0",
+   "description": "Only works if Safaricom has enabled external validation on this shortcode.",
+   "fieldname": "c2b_validation",
+   "fieldtype": "Check",
+   "label": "Reject unknown account numbers"
+  },
+  {
+   "fieldname": "c2b_registered_on",
+   "fieldtype": "Datetime",
+   "label": "URLs Registered On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "c2b_register_response",
+   "fieldtype": "Small Text",
+   "label": "Registration Response",
+   "read_only": 1
+  },
+  {
+   "fieldname": "callback_token",
+   "fieldtype": "Password",
+   "hidden": 1,
+   "label": "Callback Token",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "callback_token_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Callback Token Hash",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-26 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Royce Payments",
+ "name": "Daraja Account",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "account_name",
+ "track_changes": 1
+}
