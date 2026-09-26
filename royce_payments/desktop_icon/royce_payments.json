@@ -1,0 +1,22 @@
+{
+ "app": "royce_payments",
+ "bg_color": "gray",
+ "creation": "2026-09-26 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "wallet",
+ "icon_type": "Link",
+ "idx": 0,
+ "label": "Royce Payments",
+ "link_to": "Royce Payments",
+ "link_type": "Workspace Sidebar",
+ "logo_url": "/assets/royce_payments/icons/desktop_icons/royce_payments.svg",
+ "modified": "2026-09-26 01:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Royce Payments",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

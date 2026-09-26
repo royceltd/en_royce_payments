@@ -1,0 +1,105 @@
+{
+ "app": "royce_payments",
+ "charts": [],
+ "content": "[{\"id\": \"rp-header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Royce Payments</b></span>\", \"col\": 12}}, {\"id\": \"rp-para\", \"type\": \"paragraph\", \"data\": {\"text\": \"M-Pesa through Safaricom Daraja: STK Push on Sales Invoices and Sales Orders, and Paybill/Till payments verified with Safaricom before they are posted.\", \"col\": 12}}, {\"id\": \"rp-spacer\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-sc-c2b\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Paybill/Till Payments\", \"col\": 4}}, {\"id\": \"rp-sc-stk\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"STK Push Requests\", \"col\": 4}}, {\"id\": \"rp-sc-acc\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Daraja Account\", \"col\": 4}}, {\"id\": \"rp-spacer-2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-card-mpesa\", \"type\": \"card\", \"data\": {\"card_name\": \"M-Pesa\", \"col\": 4}}, {\"id\": \"rp-card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
+ "creation": "2026-09-26 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "wallet",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Royce Payments",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "M-Pesa",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "description": "Payments made to your Paybill/Till. Needs Review ones wait for a person.",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Daraja C2B Payment",
+   "link_count": 0,
+   "link_to": "Daraja C2B Payment",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "description": "PIN prompts sent from Sales Invoices and Sales Orders.",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Daraja STK Request",
+   "link_count": 0,
+   "link_to": "Daraja STK Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "description": "One per company: shortcode, Daraja keys, callback registration.",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Daraja Account",
+   "link_count": 0,
+   "link_to": "Daraja Account",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-09-26 01:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Royce Payments",
+ "name": "Royce Payments",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": "{} Needs Review",
+   "label": "Paybill/Till Payments",
+   "link_to": "Daraja C2B Payment",
+   "stats_filter": "{\"status\":\"Needs Review\"}",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "STK Push Requests",
+   "link_to": "Daraja STK Request",
+   "stats_filter": "{}",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "Daraja Account",
+   "link_to": "Daraja Account",
+   "stats_filter": "{}",
+   "type": "DocType"
+  }
+ ],
+ "title": "Royce Payments"
+}
