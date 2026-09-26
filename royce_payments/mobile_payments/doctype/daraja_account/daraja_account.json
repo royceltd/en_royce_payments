@@ -132,7 +132,7 @@
    "label": "STK Passkey"
   },
   {
-   "description": "Lets Royce confirm each Paybill/Till payment with Safaricom before posting it. Without these, those payments wait for review.",
+   "description": "Lets the system confirm each Paybill/Till payment with Safaricom before posting it. Without these, those payments wait for review.",
    "fieldname": "verification_section",
    "fieldtype": "Section Break",
    "label": "Payment verification"
@@ -196,7 +196,7 @@
  "links": [],
  "modified": "2026-09-26 10:00:00.000000",
  "modified_by": "Administrator",
- "module": "Royce Payments",
+ "module": "Mobile Payments",
  "name": "Daraja Account",
  "naming_rule": "By fieldname",
  "owner": "Administrator",

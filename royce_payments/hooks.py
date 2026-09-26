@@ -1,5 +1,5 @@
 app_name = "royce_payments"
-app_title = "Royce Payments"
+app_title = "Mobile Payments"
 app_publisher = "Royce Technologies LTD"
 app_description = "M-Pesa (Daraja) and other payment integrations for ERPNext"
 app_email = "josphatkips@gmail.com"

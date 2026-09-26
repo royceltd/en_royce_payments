@@ -1,7 +1,7 @@
 {
  "app": "royce_payments",
  "charts": [],
- "content": "[{\"id\": \"rp-header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Royce Payments</b></span>\", \"col\": 12}}, {\"id\": \"rp-para\", \"type\": \"paragraph\", \"data\": {\"text\": \"M-Pesa through Safaricom Daraja: STK Push on Sales Invoices and Sales Orders, and Paybill/Till payments verified with Safaricom before they are posted.\", \"col\": 12}}, {\"id\": \"rp-spacer\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-sc-c2b\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Paybill/Till Payments\", \"col\": 4}}, {\"id\": \"rp-sc-stk\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"STK Push Requests\", \"col\": 4}}, {\"id\": \"rp-sc-acc\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Daraja Account\", \"col\": 4}}, {\"id\": \"rp-spacer-2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-card-mpesa\", \"type\": \"card\", \"data\": {\"card_name\": \"M-Pesa\", \"col\": 4}}, {\"id\": \"rp-card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
+ "content": "[{\"id\": \"rp-header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Mobile Payments</b></span>\", \"col\": 12}}, {\"id\": \"rp-para\", \"type\": \"paragraph\", \"data\": {\"text\": \"M-Pesa through Safaricom Daraja: STK Push on Sales Invoices and Sales Orders, and Paybill/Till payments verified with Safaricom before they are posted.\", \"col\": 12}}, {\"id\": \"rp-spacer\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-sc-c2b\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Paybill/Till Payments\", \"col\": 4}}, {\"id\": \"rp-sc-stk\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"STK Push Requests\", \"col\": 4}}, {\"id\": \"rp-sc-acc\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Daraja Account\", \"col\": 4}}, {\"id\": \"rp-spacer-2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-card-mpesa\", \"type\": \"card\", \"data\": {\"card_name\": \"M-Pesa\", \"col\": 4}}, {\"id\": \"rp-card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
  "creation": "2026-09-26 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -11,7 +11,7 @@
  "icon": "wallet",
  "idx": 0,
  "is_hidden": 0,
- "label": "Royce Payments",
+ "label": "Mobile Payments",
  "links": [
   {
    "hidden": 0,
@@ -65,8 +65,8 @@
  ],
  "modified": "2026-09-26 01:00:00.000000",
  "modified_by": "Administrator",
- "module": "Royce Payments",
- "name": "Royce Payments",
+ "module": "Mobile Payments",
+ "name": "Mobile Payments",
  "number_cards": [],
  "owner": "Administrator",
  "parent_page": "",
@@ -101,5 +101,5 @@
    "type": "DocType"
   }
  ],
- "title": "Royce Payments"
+ "title": "Mobile Payments"
 }

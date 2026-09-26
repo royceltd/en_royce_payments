@@ -13,7 +13,7 @@
    "indent": 0,
    "keep_closed": 0,
    "label": "Home",
-   "link_to": "Royce Payments",
+   "link_to": "Mobile Payments",
    "link_type": "Workspace",
    "show_arrow": 0,
    "type": "Link"
@@ -79,9 +79,9 @@
  ],
  "modified": "2026-09-26 01:00:00.000000",
  "modified_by": "Administrator",
- "module": "Royce Payments",
- "name": "Royce Payments",
+ "module": "Mobile Payments",
+ "name": "Mobile Payments",
  "owner": "Administrator",
  "standard": 1,
- "title": "Royce Payments"
+ "title": "Mobile Payments"
 }

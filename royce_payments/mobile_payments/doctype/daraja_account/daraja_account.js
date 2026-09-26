@@ -7,7 +7,7 @@ frappe.ui.form.on("Daraja Account", {
 
 		frm.add_custom_button(__("Test Connection"), () => {
 			frappe.call({
-				method: "royce_payments.royce_payments.doctype.daraja_account.daraja_account.test_connection",
+				method: "royce_payments.mobile_payments.doctype.daraja_account.daraja_account.test_connection",
 				args: { daraja_account: frm.doc.name },
 				freeze: true,
 				callback: (r) => frappe.show_alert({ message: r.message, indicator: "green" }),

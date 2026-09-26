@@ -14,7 +14,7 @@ from frappe.tests import IntegrationTestCase
 
 from royce_payments.daraja import c2b, callbacks, posting
 
-COMPANY = "_Test Royce Payments KE"
+COMPANY = "_Test Mobile Payments KE"
 SHORTCODE = "600638"
 
 

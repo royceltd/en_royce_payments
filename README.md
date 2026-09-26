@@ -1,4 +1,4 @@
-# Royce Payments
+# Mobile Payments (`royce_payments`)
 
 Payment integrations for ERPNext v16. Phase 1: M-Pesa through Safaricom's Daraja API.
 
