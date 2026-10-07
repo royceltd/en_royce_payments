@@ -28,6 +28,8 @@
   "c2b_validation",
   "c2b_registered_on",
   "c2b_register_response",
+  "pos_section",
+  "pos_requires_received_payment",
   "callback_token",
   "callback_token_hash"
  ],
@@ -175,6 +177,18 @@
    "read_only": 1
   },
   {
+   "fieldname": "pos_section",
+   "fieldtype": "Section Break",
+   "label": "Point of Sale"
+  },
+  {
+   "default": "1",
+   "fieldname": "pos_requires_received_payment",
+   "fieldtype": "Check",
+   "label": "M-Pesa amounts on invoices must match payments received",
+   "description": "On POS and other paid-at-sale invoices, the M-Pesa amount can only be entered by sending a prompt or picking a payment Safaricom has confirmed. Stops M-Pesa being typed in for money that never arrived."
+  },
+  {
    "fieldname": "callback_token",
    "fieldtype": "Password",
    "hidden": 1,
@@ -194,7 +208,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-09-26 10:00:00.000000",
+ "modified": "2026-10-05 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Mobile Payments",
  "name": "Daraja Account",

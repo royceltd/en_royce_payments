@@ -10,7 +10,10 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import frappe
+from frappe.app import make_form_dict
 from frappe.tests import IntegrationTestCase
+from werkzeug.test import EnvironBuilder
+from werkzeug.wrappers import Request
 
 from royce_payments.daraja import c2b, callbacks, posting
 
@@ -120,12 +123,18 @@ def _status_payload(originator_id, trans_id, amount, status="Completed"):
 
 
 def _call(endpoint, token, payload):
-	"""Call a guest callback the way Frappe would, returning the top-level response."""
-	frappe.local.form_dict = frappe._dict(t=token)
+	"""Call a guest callback through a real JSON request, as Safaricom sends it: the token in
+	the query string, the payload as a JSON body. Returns (top-level response, enqueue mock)."""
+	builder = EnvironBuilder(method="POST", query_string={"t": token} if token else None, json=payload)
+	frappe.local.request = Request(builder.get_environ())
 	frappe.local.response = frappe._dict()
-	with patch.object(callbacks, "_payload", return_value=(payload, frappe.as_json(payload))), patch("frappe.enqueue"):
-		endpoint()
-	return dict(frappe.local.response)
+	try:
+		make_form_dict(frappe.local.request)
+		with patch("frappe.enqueue") as enqueue:
+			endpoint(**frappe.form_dict)
+	finally:
+		frappe.local.request = None
+	return dict(frappe.local.response), enqueue
 
 
 class TestDarajaCallbacks(IntegrationTestCase):
@@ -139,12 +148,12 @@ class TestDarajaCallbacks(IntegrationTestCase):
 
 	def test_no_or_wrong_token_does_nothing(self):
 		for token in (None, "", "0" * 48):
-			response = _call(callbacks.c2b_confirm, token, _confirmation("TOKENTEST1"))
+			response, _ = _call(callbacks.c2b_confirm, token, _confirmation("TOKENTEST1"))
 			self.assertEqual(response.get("ResultCode"), 1)
 		self.assertFalse(frappe.db.exists("Daraja C2B Payment", "TOKENTEST1"))
 
 	def test_confirmation_is_stored_unverified_and_posts_nothing(self):
-		response = _call(callbacks.c2b_confirm, self.token, _confirmation("UNVERIF001", bill_ref=_customer()))
+		response, _ = _call(callbacks.c2b_confirm, self.token, _confirmation("UNVERIF001", bill_ref=_customer()))
 		self.assertEqual(response.get("ResultCode"), 0)
 		doc = frappe.get_doc("Daraja C2B Payment", "UNVERIF001")
 		self.assertEqual(doc.status, "Unverified")
@@ -153,23 +162,27 @@ class TestDarajaCallbacks(IntegrationTestCase):
 
 	def test_resend_is_ignored(self):
 		_call(callbacks.c2b_confirm, self.token, _confirmation("RESEND0001"))
-		response = _call(callbacks.c2b_confirm, self.token, _confirmation("RESEND0001", amount="999999.00"))
+		response, _ = _call(callbacks.c2b_confirm, self.token, _confirmation("RESEND0001", amount="999999.00"))
 		self.assertEqual(response.get("ResultCode"), 0)
 		self.assertEqual(frappe.db.get_value("Daraja C2B Payment", "RESEND0001", "amount"), 1500)
 
 	def test_other_shortcode_is_refused(self):
-		response = _call(callbacks.c2b_confirm, self.token, _confirmation("OTHERSC001", shortcode="111111"))
+		response, _ = _call(callbacks.c2b_confirm, self.token, _confirmation("OTHERSC001", shortcode="111111"))
 		self.assertEqual(response.get("ResultCode"), 1)
 		self.assertFalse(frappe.db.exists("Daraja C2B Payment", "OTHERSC001"))
 
 	def test_status_result_for_a_query_we_never_made_is_ignored(self):
 		_call(callbacks.c2b_confirm, self.token, _confirmation("FORGED0001"))
-		with patch("frappe.enqueue") as enqueue:
-			frappe.local.form_dict = frappe._dict(t=self.token)
-			payload = _status_payload("made-up-id", "FORGED0001", 1500)
-			with patch.object(callbacks, "_payload", return_value=(payload, "")):
-				callbacks.status_result()
-			enqueue.assert_not_called()
+		_response, enqueue = _call(callbacks.status_result, self.token, _status_payload("made-up-id", "FORGED0001", 1500))
+		enqueue.assert_not_called()
+
+	def test_token_in_the_query_string_is_honoured_on_a_json_body(self):
+		# Regression: Frappe leaves the query string out of form_dict for JSON bodies, which
+		# once made every real Safaricom callback fail the token check.
+		response, enqueue = _call(callbacks.c2b_confirm, self.token, _confirmation("QSTOKEN001"))
+		self.assertEqual(response.get("ResultCode"), 0)
+		self.assertTrue(frappe.db.exists("Daraja C2B Payment", "QSTOKEN001"))
+		enqueue.assert_called_once()
 
 
 class TestC2BVerification(IntegrationTestCase):

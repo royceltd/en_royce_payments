@@ -10,7 +10,7 @@ from frappe import _
 from frappe.utils import add_to_date, cint, now_datetime
 
 from royce_payments.daraja import client, protocol
-from royce_payments.daraja.posting import match_c2b, post_or_review
+from royce_payments.daraja.posting import check_sales_invoice, match_c2b, post_or_review
 from royce_payments.daraja.protocol import DarajaError
 
 MAX_VERIFY_ATTEMPTS = 5
@@ -214,16 +214,14 @@ def post_reviewed(name: str, customer: str, sales_invoice: str | None = None, co
 	doc.check_permission("write")
 	if doc.status != "Needs Review" or doc.payment_entry:
 		frappe.throw(_("Only unposted payments in Needs Review can be posted"))
+	if doc.invoice_name:
+		frappe.throw(_("This payment is applied to {0} {1}").format(_(doc.invoice_doctype), doc.invoice_name))
 	if not doc.verified and not cint(confirmed_on_statement):
 		frappe.throw(_("This payment was not verified with Safaricom. Confirm it on the M-Pesa statement first."))
 
 	account = frappe.get_doc("Daraja Account", doc.daraja_account)
 	if sales_invoice:
-		invoice = frappe.db.get_value("Sales Invoice", sales_invoice, ["customer", "company"], as_dict=True)
-		if not invoice or invoice.company != account.company:
-			frappe.throw(_("Sales Invoice {0} is not in {1}").format(sales_invoice, account.company))
-		if invoice.customer != customer:
-			frappe.throw(_("Sales Invoice {0} belongs to {1}, not {2}").format(sales_invoice, invoice.customer, customer))
+		check_sales_invoice(account, sales_invoice, customer)
 
 	if not doc.verified:
 		doc.db_set({"verified": 1, "verified_by": frappe.session.user})

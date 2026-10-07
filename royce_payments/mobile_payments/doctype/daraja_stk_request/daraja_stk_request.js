@@ -1,13 +1,21 @@
 // Copyright (c) 2026, Royce Technologies LTD and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Daraja C2B Payment", {
+frappe.ui.form.on("Daraja STK Request", {
 	refresh(frm) {
-		if (frm.doc.status !== "Needs Review" || frm.doc.payment_entry || frm.doc.invoice_name) return;
+		const doc = frm.doc;
+		if (!["Needs Review", "Received"].includes(doc.status) || doc.payment_entry || doc.invoice_name) return;
 
 		frm.add_custom_button(__("Post Payment"), () => {
 			const fields = [
-				{ fieldname: "customer", fieldtype: "Link", options: "Customer", label: __("Customer"), reqd: 1 },
+				{
+					fieldname: "customer",
+					fieldtype: "Link",
+					options: "Customer",
+					label: __("Customer"),
+					default: doc.customer,
+					reqd: 1,
+				},
 				{
 					fieldname: "sales_invoice",
 					fieldtype: "Link",
@@ -18,13 +26,21 @@ frappe.ui.form.on("Daraja C2B Payment", {
 					}),
 				},
 			];
-			if (!frm.doc.verified) {
+			if (!doc.mpesa_receipt) {
+				fields.push({
+					fieldname: "mpesa_receipt",
+					fieldtype: "Data",
+					label: __("M-Pesa receipt number (from the statement)"),
+					reqd: 1,
+				});
+			}
+			if (!doc.verified) {
 				fields.push({
 					fieldname: "confirmed_on_statement",
 					fieldtype: "Check",
-					label: __("I have confirmed receipt {0} of {1} on the M-Pesa statement", [
-						frm.doc.trans_id,
-						format_currency(frm.doc.amount, "KES"),
+					label: __("I have confirmed this payment of {0} from {1} on the M-Pesa statement", [
+						format_currency(doc.callback_amount || doc.amount, "KES"),
+						doc.phone,
 					]),
 					reqd: 1,
 				});
@@ -35,8 +51,8 @@ frappe.ui.form.on("Daraja C2B Payment", {
 				primary_action_label: __("Post"),
 				primary_action(values) {
 					frappe.call({
-						method: "royce_payments.daraja.c2b.post_reviewed",
-						args: { name: frm.doc.name, ...values },
+						method: "royce_payments.daraja.stk.post_reviewed",
+						args: { name: doc.name, ...values },
 						freeze: true,
 						callback: () => {
 							dialog.hide();

@@ -7,9 +7,28 @@ app_license = "Proprietary"
 
 required_apps = ["erpnext"]
 
+# Shared M-Pesa dialogs, used by the form scripts below and by the POS screen.
+app_include_js = "/assets/royce_payments/js/mpesa.js"
+
 doctype_js = {
 	"Sales Invoice": "public/js/daraja_stk.js",
+	"POS Invoice": "public/js/daraja_stk.js",
 	"Sales Order": "public/js/daraja_stk.js",
+}
+
+# M-Pesa on the POS screen's payment step.
+page_js = {"point-of-sale": "public/js/pos_mpesa.js"}
+
+# M-Pesa applied to POS invoices: checked on submit, settled on submit, freed on cancel/delete.
+_invoice_events = {
+	"before_submit": "royce_payments.daraja.invoice.before_submit",
+	"on_submit": "royce_payments.daraja.invoice.on_submit",
+	"on_cancel": "royce_payments.daraja.invoice.on_cancel",
+	"on_trash": "royce_payments.daraja.invoice.on_trash",
+}
+doc_events = {
+	"Sales Invoice": _invoice_events,
+	"POS Invoice": _invoice_events,
 }
 
 # Public names for the Daraja callbacks. These URLs get registered at Safaricom (C2B can be
@@ -31,3 +50,6 @@ scheduler_events = {
 		],
 	},
 }
+
+# A fresh test site needs ERPNext setup completed first.
+before_tests = "royce_payments.testing.before_tests"

@@ -10,12 +10,16 @@
   "daraja_account",
   "reference_doctype",
   "reference_name",
+  "settlement",
   "customer",
   "column_break_1",
   "phone",
   "amount",
   "mpesa_receipt",
   "payment_entry",
+  "invoice_doctype",
+  "invoice_name",
+  "verified",
   "daraja_section",
   "merchant_request_id",
   "checkout_request_id",
@@ -36,7 +40,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Pending\nVerifying\nPaid\nFailed\nCancelled\nNeeds Review",
+   "options": "Pending\nVerifying\nReceived\nPaid\nFailed\nCancelled\nNeeds Review",
    "read_only": 1
   },
   {
@@ -62,6 +66,15 @@
    "options": "reference_doctype",
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "default": "Payment Entry",
+   "fieldname": "settlement",
+   "fieldtype": "Select",
+   "label": "Settled By",
+   "options": "Payment Entry\nInvoice",
+   "read_only": 1,
+   "description": "Invoice: the money is recorded on the invoice's own M-Pesa payment row (POS). Payment Entry: a separate Payment Entry is posted."
   },
   {
    "fieldname": "customer",
@@ -102,6 +115,29 @@
    "fieldtype": "Link",
    "label": "Payment Entry",
    "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_doctype",
+   "fieldtype": "Link",
+   "label": "Applied To Type",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Applied To Invoice",
+   "options": "invoice_doctype",
+   "read_only": 1,
+   "search_index": 1,
+   "in_list_view": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "verified",
+   "fieldtype": "Check",
+   "label": "Confirmed by Safaricom",
    "read_only": 1
   },
   {
@@ -174,7 +210,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-09-26 10:00:00.000000",
+ "modified": "2026-10-05 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Mobile Payments",
  "name": "Daraja STK Request",
@@ -197,7 +233,8 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Accounts Manager"
+   "role": "Accounts Manager",
+   "write": 1
   },
   {
    "print": 1,

@@ -24,7 +24,9 @@ def _respond(body: dict) -> None:
 
 
 def _account():
-	token = frappe.form_dict.get("t")
+	# From the query string itself: Safaricom posts JSON, and for a JSON body Frappe builds
+	# form_dict from the body alone, so `t` never reaches form_dict.
+	token = frappe.request.args.get("t") if frappe.request else None
 	if not token or not isinstance(token, str):
 		return None
 	name = frappe.db.get_value(
@@ -63,18 +65,25 @@ def stk_result(**kwargs):
 		frappe.log_error("Daraja STK callback for an unknown request", raw, reference_doctype="Daraja Account")
 		return _respond(ACCEPTED)
 
-	request = frappe.get_doc("Daraja STK Request", name)
-	if request.status == "Pending":
-		request.db_set(
-			{
-				"status": "Verifying",
-				"callback_payload": raw,
-				"callback_result_code": result.result_code,
-				"callback_amount": result.amount,
-				"mpesa_receipt": result.receipt,
-				"transaction_time": result.transaction_time,
-			}
-		)
+	request = frappe.get_doc("Daraja STK Request", name, for_update=True)
+	if request.callback_payload:
+		# A resend. The first callback is the one we keep.
+		return _respond(ACCEPTED)
+
+	# Always kept, whatever the request's state: a callback that comes after the scheduler
+	# gave up (Needs Review) carries the receipt a person needs to post the payment.
+	request.db_set(
+		{
+			"callback_payload": raw,
+			"callback_result_code": result.result_code,
+			# Only a successful payment carries an amount; the column is NOT NULL.
+			"callback_amount": result.amount or 0,
+			"mpesa_receipt": result.receipt,
+			"transaction_time": result.transaction_time,
+		}
+	)
+	if request.status in ("Pending", "Needs Review"):
+		request.db_set("status", "Verifying")
 		frappe.enqueue(
 			stk.verify, queue="short", name=name, enqueue_after_commit=True,
 			job_id=f"daraja-stk-verify-{name}", deduplicate=True,

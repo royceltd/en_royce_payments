@@ -55,6 +55,26 @@ def outstanding_for(doctype: str, name: str) -> float:
 	return max(total - flt(doc.advance_paid), 0)
 
 
+def receipt_on_invoice(receipt: str) -> tuple[str, str] | None:
+	"""(doctype, name) of the invoice this M-Pesa receipt is applied to, if any."""
+	for doctype, receipt_field in (("Daraja STK Request", "mpesa_receipt"), ("Daraja C2B Payment", "trans_id")):
+		row = frappe.db.get_value(
+			doctype, {receipt_field: receipt, "invoice_name": ["is", "set"]}, ["invoice_doctype", "invoice_name"]
+		)
+		if row:
+			return row
+	return None
+
+
+def check_sales_invoice(account, sales_invoice: str, customer: str) -> None:
+	"""A person picked this invoice to post against: it must be this company's and this customer's."""
+	invoice = frappe.db.get_value("Sales Invoice", sales_invoice, ["customer", "company"], as_dict=True)
+	if not invoice or invoice.company != account.company:
+		frappe.throw(_("Sales Invoice {0} is not in {1}").format(sales_invoice, account.company))
+	if invoice.customer != customer:
+		frappe.throw(_("Sales Invoice {0} belongs to {1}, not {2}").format(sales_invoice, invoice.customer, customer))
+
+
 def post_or_review(account, **kwargs) -> tuple[str | None, str | None]:
 	"""post_payment(), but any failure becomes a review note instead of an exception.
 
@@ -104,6 +124,9 @@ def post_payment(
 	)
 	if existing:
 		return existing
+	on_invoice = receipt_on_invoice(receipt)
+	if on_invoice:
+		raise NeedsReview(_("M-Pesa receipt {0} is already recorded on {1} {2}").format(receipt, *on_invoice))
 
 	company_currency = frappe.get_cached_value("Company", account.company, "default_currency")
 	if company_currency != CURRENCY:

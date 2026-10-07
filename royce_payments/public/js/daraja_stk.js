@@ -1,11 +1,27 @@
-// "Request M-Pesa payment" on submitted Sales Invoices and Sales Orders (STK Push).
-// hooks.py loads this file for both doctypes, so it can run twice in one session: the
-// guard keeps it from redeclaring itself or registering the handlers twice.
+// M-Pesa buttons on Sales Invoice, POS Invoice and Sales Order forms. Dialogs live in mpesa.js.
+//
+// - Submitted Sales Invoice / Sales Order: send a prompt; the payment is posted as a Payment
+//   Entry. On a Sales Invoice, a payment that already arrived can be posted against it too.
+// - Unsubmitted POS-type invoice: send a prompt or pick a payment that arrived; it goes on the
+//   invoice's M-Pesa payment row and is recorded when the invoice is submitted.
+//
+// hooks.py loads this file for three doctypes, so it can run more than once in a session:
+// the guard keeps it from registering the handlers twice.
 
 if (!window.royce_payments_stk) {
 window.royce_payments_stk = {
-	POLL_MS: 4000,
-	POLL_LIMIT: 30, // two minutes; after that the scheduler finishes the request
+	modes_cache: {},
+
+	async modes(company) {
+		if (!(company in this.modes_cache)) {
+			const { message } = await frappe.call({
+				method: "royce_payments.daraja.invoice.get_modes",
+				args: { company },
+			});
+			this.modes_cache[company] = message || {};
+		}
+		return this.modes_cache[company];
+	},
 
 	outstanding(frm) {
 		if (frm.doctype === "Sales Invoice") return flt(frm.doc.outstanding_amount);
@@ -13,97 +29,129 @@ window.royce_payments_stk = {
 		return Math.max(total - flt(frm.doc.advance_paid), 0);
 	},
 
-	async setup(frm) {
-		if (frm.doc.docstatus !== 1 || frm.doc.currency !== "KES") return;
-		if (frm.doctype === "Sales Order" && ["Closed", "On Hold", "Completed"].includes(frm.doc.status)) return;
-		if (royce_payments_stk.outstanding(frm) < 1) return;
-
-		const { message } = await frappe.db.get_value(
-			"Daraja Account",
-			{ company: frm.doc.company, enabled: 1 },
-			"name"
-		);
-		if (!message || !message.name) return;
-
-		frm.add_custom_button(__("Request M-Pesa Payment"), () => royce_payments_stk.prompt(frm), __("Create"));
+	paid_at_sale(frm) {
+		return (frm.doctype === "POS Invoice" || cint(frm.doc.is_pos)) && !cint(frm.doc.is_return);
 	},
 
-	prompt(frm) {
-		const dialog = new frappe.ui.Dialog({
-			title: __("Request M-Pesa payment"),
-			fields: [
-				{
-					fieldname: "phone",
-					fieldtype: "Data",
-					options: "Phone",
-					label: __("Customer's M-Pesa number"),
-					default: frm.doc.contact_mobile || "",
-					reqd: 1,
-				},
-				{
-					fieldname: "amount",
-					fieldtype: "Int",
-					label: __("Amount (KES)"),
-					default: Math.ceil(royce_payments_stk.outstanding(frm)),
-					reqd: 1,
-				},
-			],
-			primary_action_label: __("Send prompt"),
-			primary_action(values) {
+	async setup(frm) {
+		if (frm.is_new() || frm.doc.currency !== "KES") return;
+		const modes = await royce_payments_stk.modes(frm.doc.company);
+		if (!Object.keys(modes).length) return;
+
+		if (frm.doc.docstatus === 0 && royce_payments_stk.paid_at_sale(frm)) {
+			royce_payments_stk.setup_draft(frm);
+		} else if (frm.doc.docstatus === 1 && frm.doctype !== "POS Invoice") {
+			royce_payments_stk.setup_submitted(frm);
+		}
+	},
+
+	setup_submitted(frm) {
+		if (frm.doctype === "Sales Order" && ["Closed", "On Hold", "Completed"].includes(frm.doc.status)) return;
+		if (royce_payments_stk.outstanding(frm) < 1) return;
+		const mpesa = royce_payments.mpesa;
+
+		frm.add_custom_button(
+			__("Request M-Pesa Payment"),
+			async () => {
+				const name = await mpesa.send_prompt({
+					doctype: frm.doctype,
+					name: frm.doc.name,
+					phone: frm.doc.contact_mobile,
+					amount: royce_payments_stk.outstanding(frm),
+				});
+				mpesa.watch(name, (status) => status?.status === "Paid" && frm.reload_doc());
+			},
+			__("Create")
+		);
+
+		if (frm.doctype !== "Sales Invoice") return;
+		frm.add_custom_button(
+			__("Receive M-Pesa Payment"),
+			async () => {
+				const [row] = await mpesa.pick({
+					doctype: frm.doctype,
+					name: frm.doc.name,
+					multiple: false,
+					title: __("Post a received M-Pesa payment against {0}", [frm.doc.name]),
+				});
+				const method =
+					row.doctype === "Daraja STK Request"
+						? "royce_payments.daraja.stk.post_reviewed"
+						: "royce_payments.daraja.c2b.post_reviewed";
 				frappe.call({
-					method: "royce_payments.daraja.stk.request_payment",
-					args: {
-						reference_doctype: frm.doctype,
-						reference_name: frm.doc.name,
-						phone: values.phone,
-						amount: values.amount,
-					},
+					method,
+					args: { name: row.name, customer: frm.doc.customer, sales_invoice: frm.doc.name },
 					freeze: true,
-					callback: (r) => {
-						dialog.hide();
-						frappe.show_alert({
-							message: __("Prompt sent. Waiting for the customer to enter their PIN..."),
-							indicator: "blue",
-						});
-						royce_payments_stk.poll(frm, r.message.name, 0);
+					callback: () => {
+						frappe.show_alert({ message: __("M-Pesa payment posted"), indicator: "green" });
+						frm.reload_doc();
 					},
 				});
 			},
-		});
-		dialog.show();
+			__("Create")
+		);
 	},
 
-	poll(frm, name, count) {
-		if (count >= royce_payments_stk.POLL_LIMIT) {
-			frappe.show_alert({
-				message: __("Still waiting for M-Pesa. The payment will be recorded automatically when it arrives."),
-				indicator: "orange",
-			});
-			return;
+	async setup_draft(frm) {
+		const mpesa = royce_payments.mpesa;
+		const group = __("M-Pesa");
+
+		const sync = async (summary) => {
+			summary = summary || (await mpesa.summary(frm.doctype, frm.doc.name));
+			if (await mpesa.set_payment_row(frm, summary)) {
+				frappe.show_alert({
+					message: __("M-Pesa received: {0}. Save or submit to record it.", [
+						format_currency(summary.total, "KES"),
+					]),
+					indicator: "green",
+				});
+			}
+		};
+		const saved = async () => {
+			if (frm.is_dirty()) await frm.save();
+		};
+
+		frm.add_custom_button(
+			__("Request Payment"),
+			async () => {
+				await saved();
+				const summary = await mpesa.summary(frm.doctype, frm.doc.name);
+				const total = flt(frm.doc.rounded_total) || flt(frm.doc.grand_total);
+				const waiting = summary.pending.reduce((sum, p) => sum + flt(p.amount), 0);
+				const name = await mpesa.send_prompt({
+					doctype: frm.doctype,
+					name: frm.doc.name,
+					phone: frm.doc.contact_mobile,
+					amount: Math.max(total - summary.total - waiting, 0),
+				});
+				mpesa.watch(name, (status) => status?.status === "Received" && sync());
+			},
+			group
+		);
+
+		frm.add_custom_button(
+			__("Add Received Payment"),
+			async () => {
+				await saved();
+				const rows = await mpesa.pick({ doctype: frm.doctype, name: frm.doc.name });
+				sync(await mpesa.apply(frm.doctype, frm.doc.name, rows));
+			},
+			group
+		);
+
+		const summary = await mpesa.summary(frm.doctype, frm.doc.name);
+		if (summary.applied.length || summary.pending.length) {
+			const parts = summary.applied.map((r) => `${r.receipt} (${format_currency(r.amount, "KES")})`);
+			if (summary.pending.length) parts.push(__("{0} prompt(s) waiting", [summary.pending.length]));
+			frm.dashboard.set_headline(
+				__("M-Pesa on this invoice: {0}", [frappe.utils.escape_html(parts.join(", "))]),
+				"green"
+			);
 		}
-		setTimeout(() => {
-			frappe.call({
-				method: "royce_payments.daraja.stk.get_status",
-				args: { name },
-				callback: ({ message }) => {
-					if (message.status === "Paid") {
-						frappe.show_alert({ message: __("M-Pesa payment received"), indicator: "green" });
-						frm.reload_doc();
-					} else if (["Failed", "Cancelled", "Needs Review"].includes(message.status)) {
-						frappe.msgprint({
-							title: __("M-Pesa payment {0}", [__(message.status)]),
-							message: message.result_desc || "",
-							indicator: message.status === "Needs Review" ? "orange" : "red",
-						});
-					} else {
-						royce_payments_stk.poll(frm, name, count + 1);
-					}
-				},
-			});
-		}, royce_payments_stk.POLL_MS);
 	},
 };
 
 frappe.ui.form.on("Sales Invoice", { refresh: (frm) => royce_payments_stk.setup(frm) });
+frappe.ui.form.on("POS Invoice", { refresh: (frm) => royce_payments_stk.setup(frm) });
 frappe.ui.form.on("Sales Order", { refresh: (frm) => royce_payments_stk.setup(frm) });
 }

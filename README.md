@@ -10,6 +10,19 @@ Payment integrations for ERPNext v16. Phase 1: M-Pesa through Safaricom's Daraja
   number the payer typed (Sales Invoice, Sales Order or Customer ID) and posted. Anything
   unmatched or unverifiable waits in **Daraja C2B Payment** with status *Needs Review*.
 
+- **POS and paid-at-sale invoices:** on the POS screen's payment step, the M-Pesa mode gets
+  *Send prompt* (STK Push) and *Find payment* (a Till/Paybill payment the customer already
+  made). The confirmed amount goes on the invoice's own M-Pesa payment row, with the receipt
+  numbers in its reference, and the invoice records it when submitted: no separate Payment
+  Entry. Works whether POS Settings creates Sales Invoices or POS Invoices, and on desk invoices
+  with *Include Payment (POS)*. Cancelling or deleting the invoice frees the payment.
+- **Received payments on submitted invoices:** *Receive M-Pesa Payment* on a Sales Invoice
+  posts a payment that already arrived as a Payment Entry against it.
+
+By default (Daraja Account → *M-Pesa amounts on invoices must match payments received*), an
+invoice cannot be submitted with an M-Pesa amount that Safaricom hasn't confirmed. This stops
+M-Pesa being keyed in for money that never arrived.
+
 Design and security model: ADR-020 in the `royce_ip` repo. The short version: a callback
 from Safaricom is a claim, not proof. Nothing is posted until it is verified.
 
@@ -24,7 +37,10 @@ from Safaricom is a claim, not proof. Nothing is posted until it is verified.
    recorded but a person posts each one.
 4. **Test Connection**, then **Register Paybill/Till URLs**. In production Safaricom allows
    this once per shortcode.
-5. The site's scheduler must be on (it finishes payments whose callback got lost).
+5. For POS: add the M-Pesa mode of payment to each POS Profile, with the same ledger as the
+   Daraja Account. Till payments can only be picked once Safaricom confirms them, so set up
+   the initiator (step 3) for shops whose customers pay to the Till.
+6. The site's scheduler must be on (it finishes payments whose callback got lost).
 
 Cloudflare in front of the site must not challenge `/api/method/royce_payments.cb.*`.
 

@@ -1,20 +1,27 @@
-"""STK Push (Mpesa Express): prompt a customer's phone to pay a Sales Invoice or Sales Order."""
+"""STK Push (Mpesa Express): prompt a customer's phone to pay an invoice or Sales Order.
+
+Two ways a confirmed payment is settled (the request's `settlement`):
+- Payment Entry: for a submitted Sales Invoice or Sales Order. Posted here.
+- Invoice: for an unsubmitted POS invoice. It becomes Received, and the invoice's own M-Pesa
+  payment row records it when the invoice is submitted (see invoice.py).
+"""
 
 import math
+import re
 
 import frappe
 from frappe import _
 from frappe.utils import add_to_date, cint, now_datetime
 
-from royce_payments.daraja import client, protocol
-from royce_payments.daraja.posting import outstanding_for, post_or_review
+from royce_payments.daraja import client, invoice, protocol
+from royce_payments.daraja.posting import check_sales_invoice, outstanding_for, post_or_review
 from royce_payments.daraja.protocol import DarajaError
 
-SUPPORTED_DOCTYPES = ("Sales Invoice", "Sales Order")
+SUPPORTED_DOCTYPES = ("Sales Invoice", "POS Invoice", "Sales Order")
 # One open prompt per phone at a time; a second one within this window is refused.
 PHONE_COOLDOWN_SECONDS = 120
 MAX_VERIFY_ATTEMPTS = 10
-FINAL_STATUSES = ("Paid", "Failed", "Cancelled", "Needs Review")
+FINAL_STATUSES = ("Received", "Paid", "Failed", "Cancelled", "Needs Review")
 
 
 def active_account(company: str, name: str | None = None):
@@ -33,9 +40,14 @@ def request_payment(reference_doctype: str, reference_name: str, phone: str, amo
 		frappe.throw(_("M-Pesa requests are supported on {0} only").format(", ".join(SUPPORTED_DOCTYPES)))
 
 	doc = frappe.get_doc(reference_doctype, reference_name)
-	doc.check_permission("read")
-	frappe.has_permission("Payment Entry", "create", throw=True)
-	if doc.docstatus != 1:
+	if doc.docstatus == 0 and invoice.is_paid_at_sale(doc):
+		settlement = "Invoice"
+		doc.check_permission("write")
+	elif doc.docstatus == 1 and reference_doctype != "POS Invoice":
+		settlement = "Payment Entry"
+		doc.check_permission("read")
+		frappe.has_permission("Payment Entry", "create", throw=True)
+	else:
 		frappe.throw(_("Submit the {0} before requesting payment").format(_(reference_doctype)))
 	if doc.currency != "KES":
 		frappe.throw(_("M-Pesa payments must be in KES"))
@@ -46,7 +58,10 @@ def request_payment(reference_doctype: str, reference_name: str, phone: str, amo
 		frappe.throw(_("Enter a Kenyan mobile number, for example 0712 345 678"))
 
 	amount = cint(amount)
-	ceiling = math.ceil(outstanding_for(reference_doctype, reference_name))
+	if settlement == "Invoice":
+		ceiling = math.ceil(invoice.unreserved_amount(doc))
+	else:
+		ceiling = math.ceil(outstanding_for(reference_doctype, reference_name))
 	if amount < 1 or amount > ceiling:
 		frappe.throw(_("Amount must be a whole number between 1 and {0}").format(ceiling))
 
@@ -68,6 +83,9 @@ def request_payment(reference_doctype: str, reference_name: str, phone: str, amo
 			"status": "Pending",
 			"reference_doctype": reference_doctype,
 			"reference_name": reference_name,
+			"settlement": settlement,
+			"invoice_doctype": reference_doctype if settlement == "Invoice" else None,
+			"invoice_name": reference_name if settlement == "Invoice" else None,
 			"customer": doc.customer,
 			"phone": phone,
 			"amount": amount,
@@ -118,6 +136,8 @@ def get_status(name: str):
 		"status": request.status,
 		"result_desc": request.result_desc,
 		"payment_entry": request.payment_entry,
+		"mpesa_receipt": request.mpesa_receipt,
+		"invoice_name": request.invoice_name,
 	}
 
 
@@ -154,7 +174,7 @@ def verify(name: str) -> None:
 		request.db_set({"verify_attempts": attempts, "status": status, "result_code": code, "result_desc": desc})
 		return
 
-	request.db_set({"verify_attempts": attempts, "result_code": 0, "result_desc": desc})
+	request.db_set({"verify_attempts": attempts, "result_code": 0, "result_desc": desc, "verified": 1})
 	if not request.mpesa_receipt:
 		# Paid, but the receipt only comes in the callback, which hasn't arrived. The
 		# callback, or a person, finishes this.
@@ -176,6 +196,12 @@ def _post(request, account) -> None:
 			}
 		)
 		return
+	if request.settlement == "Invoice":
+		# The invoice records the money when it is submitted. If the cashier gave up on it
+		# (submitted without this, or deleted it), the link is already gone and this
+		# payment is free to apply to another invoice or to post.
+		request.db_set("status", "Received")
+		return
 	pe, problem = post_or_review(
 		account,
 		amount=request.amount,
@@ -190,6 +216,55 @@ def _post(request, account) -> None:
 		request.db_set({"status": "Needs Review", "result_desc": problem})
 		return
 	request.db_set({"status": "Paid", "payment_entry": pe})
+
+
+@frappe.whitelist(methods=["POST"])
+def post_reviewed(
+	name: str,
+	customer: str,
+	sales_invoice: str | None = None,
+	mpesa_receipt: str | None = None,
+	confirmed_on_statement=0,
+):
+	"""A person posts an STK payment as a Payment Entry: one in Needs Review, or one Received
+	for a POS invoice that was never completed."""
+	frappe.has_permission("Payment Entry", "create", throw=True)
+	request = frappe.get_doc("Daraja STK Request", name, for_update=True)
+	request.check_permission("write")
+	if request.status not in ("Needs Review", "Received") or request.payment_entry:
+		frappe.throw(_("Only unposted requests in Needs Review or Received can be posted"))
+	if request.invoice_name:
+		frappe.throw(_("This payment is applied to {0} {1}").format(_(request.invoice_doctype), request.invoice_name))
+	if not cint(request.verified) and not cint(confirmed_on_statement):
+		frappe.throw(_("Safaricom never confirmed this payment. Confirm it on the M-Pesa statement first."))
+
+	receipt = request.mpesa_receipt or (mpesa_receipt or "").strip().upper()
+	if not re.fullmatch(r"[A-Z0-9]{6,20}", receipt):
+		frappe.throw(_("Enter the M-Pesa receipt number from the statement"))
+
+	account = frappe.get_doc("Daraja Account", request.daraja_account)
+	if sales_invoice:
+		check_sales_invoice(account, sales_invoice, customer)
+
+	pe, problem = post_or_review(
+		account,
+		amount=request.callback_amount or request.amount,
+		receipt=receipt,
+		payment_date=request.transaction_time or request.creation,
+		customer=customer,
+		against_doctype="Sales Invoice" if sales_invoice else None,
+		against_name=sales_invoice,
+		remarks=_("M-Pesa STK payment {0} from {1}").format(receipt, request.phone),
+	)
+	if problem:
+		frappe.throw(problem)
+	request.db_set(
+		{"status": "Paid", "payment_entry": pe, "mpesa_receipt": receipt, "customer": customer}
+	)
+	if not cint(request.verified):
+		request.db_set("verified", 1)
+	request.add_comment("Info", _("Posted from review by {0}").format(frappe.session.user))
+	return pe
 
 
 def recover_pending() -> None:
