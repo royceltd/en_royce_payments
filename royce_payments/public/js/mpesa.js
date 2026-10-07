@@ -4,8 +4,12 @@
 frappe.provide("royce_payments");
 
 royce_payments.mpesa = {
+	// Our own server is polled, never Safaricom. Fast while the customer is entering their PIN,
+	// then slower: Safaricom can take minutes to confirm, and the sale should still pick it up.
 	POLL_MS: 4000,
-	POLL_LIMIT: 30, // two minutes; after that the scheduler finishes the request
+	SLOW_POLL_MS: 15000,
+	FAST_POLLS: 30, // two minutes
+	POLL_LIMIT: 60, // then ~7.5 more minutes; after that the scheduler still finishes the request
 	PICKER_REFRESH_MS: 5000,
 
 	// Ask Safaricom to prompt the customer's phone. Resolves with the request name.
@@ -53,8 +57,9 @@ royce_payments.mpesa = {
 	},
 
 	// Poll an STK request until it settles. on_change(status) gets the final status payload,
-	// or null if it is still unfinished after POLL_LIMIT tries.
-	watch(request_name, on_change, count = 0) {
+	// or null if it is still unfinished after POLL_LIMIT tries. on_progress(status), if given,
+	// is called once when the customer has paid but Safaricom hasn't confirmed yet.
+	watch(request_name, on_change, on_progress = null, count = 0) {
 		const me = royce_payments.mpesa;
 		if (count >= me.POLL_LIMIT) {
 			frappe.show_alert({
@@ -64,13 +69,23 @@ royce_payments.mpesa = {
 			on_change(null);
 			return;
 		}
+		if (count === me.FAST_POLLS) {
+			frappe.show_alert({
+				message: __("Waiting for Safaricom to confirm the M-Pesa payment..."),
+				indicator: "orange",
+			});
+		}
 		setTimeout(() => {
 			frappe.call({
 				method: "royce_payments.daraja.stk.get_status",
 				args: { name: request_name },
 				callback: ({ message }) => {
 					if (["Pending", "Verifying"].includes(message.status)) {
-						me.watch(request_name, on_change, count + 1);
+						if (on_progress && message.mpesa_receipt) {
+							on_progress(message);
+							on_progress = null;
+						}
+						me.watch(request_name, on_change, on_progress, count + 1);
 						return;
 					}
 					if (["Paid", "Received"].includes(message.status)) {
@@ -88,7 +103,7 @@ royce_payments.mpesa = {
 					on_change(message);
 				},
 			});
-		}, me.POLL_MS);
+		}, count < me.FAST_POLLS ? me.POLL_MS : me.SLOW_POLL_MS);
 	},
 
 	// Let a person pick payments that arrived (Till/Paybill, or prompts nobody used).
@@ -230,6 +245,27 @@ royce_payments.mpesa = {
 			return null;
 		}
 		await frappe.model.set_value(row.doctype, row.name, "amount", flt(summary.total));
+		await royce_payments.mpesa.rebalance_default_mode(frm, row);
 		return row;
+	},
+
+	// The POS fills the profile's default mode (usually Cash) with the whole total at checkout.
+	// Once M-Pesa covers part of the bill, that row must only carry what is still owed, or
+	// the invoice shows money twice and the till pays out the difference as "change".
+	// Mirrors ERPNext's own rule for a second mode: it gets the remaining amount, never less
+	// than zero. Rows the cashier typed into (not the default) are left alone, so splits work.
+	async rebalance_default_mode(frm, mpesa_row) {
+		const default_row = (frm.doc.payments || []).find((p) => cint(p.default) && p.name !== mpesa_row.name);
+		if (!default_row) return;
+		const total = cint(frappe.sys_defaults.disable_rounded_total)
+			? flt(frm.doc.grand_total)
+			: flt(frm.doc.rounded_total) || flt(frm.doc.grand_total);
+		const others = (frm.doc.payments || [])
+			.filter((p) => p.name !== default_row.name)
+			.reduce((sum, p) => sum + flt(p.amount), 0);
+		const remaining = Math.max(flt(total - others, precision("amount", default_row)), 0);
+		if (flt(default_row.amount) !== remaining) {
+			await frappe.model.set_value(default_row.doctype, default_row.name, "amount", remaining);
+		}
 	},
 };

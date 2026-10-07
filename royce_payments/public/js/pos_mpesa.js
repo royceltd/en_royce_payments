@@ -47,7 +47,17 @@ royce_payments.pos_mpesa = {
 		if (!frm || frm.doc.__islocal || frm.doc.docstatus !== 0 || frm.doc.currency !== "KES") return;
 		const modes = await this.modes(frm.doc.company);
 		if (!Object.keys(modes).length) return;
-		if (this.summary_for !== frm.doc.name) await this.refresh_summary(frm);
+		if (this.summary_for !== frm.doc.name) {
+			const summary = await this.refresh_summary(frm);
+			// A sale reopened after its payment was confirmed (the screen stopped watching, or
+			// the page was reloaded): put the confirmed amount on it. Only when something was
+			// received, so an amount typed in by hand is never wiped.
+			const row = (frm.doc.payments || []).find((p) => p.mode_of_payment in modes);
+			if (row && summary.total && flt(row.amount) !== flt(summary.total)) {
+				await this.apply_to_row(payment, frm, summary);
+				return; // apply_to_row re-renders, which decorates again
+			}
+		}
 
 		(frm.doc.payments || [])
 			.filter((p) => p.mode_of_payment in modes)
@@ -70,24 +80,38 @@ royce_payments.pos_mpesa = {
 	actions_html() {
 		const s = this.summary || { applied: [], pending: [] };
 		const esc = frappe.utils.escape_html;
+		const chip = (r, color, text, title) => `<span class="indicator-pill ${color}" style="margin: 2px">
+				${text}
+				<a class="royce-mpesa-release" data-doctype="${esc(r.doctype)}" data-name="${esc(
+			r.name
+		)}" title="${title}" style="margin-left: 4px">&times;</a>
+			</span>`;
+		const amount = (r) => format_currency(r.amount, "KES");
+		// Counted on the sale. "confirming": counted on Safaricom's result alone (Daraja
+		// Account opt-in); Safaricom's own confirmation is still to come.
 		const applied = s.applied
-			.map(
-				(r) => `<span class="indicator-pill green" style="margin: 2px">
-					${esc(r.receipt || "")} · ${format_currency(r.amount, "KES")}
-					<a class="royce-mpesa-release" data-doctype="${esc(r.doctype)}" data-name="${esc(
-					r.name
-				)}" title="${__("Remove")}" style="margin-left: 4px">&times;</a>
-				</span>`
+			.map((r) =>
+				chip(
+					r,
+					"green",
+					r.confirmed
+						? `${esc(r.receipt || "")} · ${amount(r)}`
+						: `${esc(r.receipt || "")} · ${amount(r)} · ${__("confirming")}`,
+					__("Remove")
+				)
 			)
 			.join("");
+		// Not counted yet.
 		const pending = s.pending
-			.map(
-				(r) => `<span class="indicator-pill orange" style="margin: 2px">
-					${__("Waiting for PIN")} · ${esc(r.phone || "")} · ${format_currency(r.amount, "KES")}
-					<a class="royce-mpesa-release" data-doctype="${esc(r.doctype)}" data-name="${esc(
-					r.name
-				)}" title="${__("Stop waiting")}" style="margin-left: 4px">&times;</a>
-				</span>`
+			.map((r) =>
+				r.paid
+					? chip(
+							r,
+							"blue",
+							`${__("Paid, confirming...")} · ${esc(r.receipt || "")} · ${amount(r)}`,
+							__("Stop waiting")
+					  )
+					: chip(r, "orange", `${__("Waiting for PIN")} · ${esc(r.phone || "")} · ${amount(r)}`, __("Stop waiting"))
 			)
 			.join("");
 		return `<div class="royce-mpesa" style="margin-top: var(--margin-sm); cursor: default">
@@ -131,11 +155,21 @@ royce_payments.pos_mpesa = {
 		});
 		await this.refresh_summary(frm);
 		payment.render_payment_mode_dom();
-		royce_payments.mpesa.watch(name, async () => {
-			// The cashier may have moved on to another sale meanwhile.
-			if (payment.events.get_frm().doc.name !== frm.doc.name) return;
-			await this.apply_to_row(payment, frm, await this.refresh_summary(frm));
-		});
+		// The cashier may have moved on to another sale meanwhile.
+		const same_sale = () => payment.events.get_frm().doc.name === frm.doc.name;
+		royce_payments.mpesa.watch(
+			name,
+			async () => {
+				if (!same_sale()) return;
+				await this.apply_to_row(payment, frm, await this.refresh_summary(frm));
+			},
+			async () => {
+				// Paid on the phone; Safaricom still confirming. Show it, don't count it yet.
+				if (!same_sale()) return;
+				await this.refresh_summary(frm);
+				payment.render_payment_mode_dom();
+			}
+		);
 	},
 
 	async pick(payment, frm) {

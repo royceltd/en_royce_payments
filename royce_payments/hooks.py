@@ -45,7 +45,9 @@ override_whitelisted_methods = {
 
 scheduler_events = {
 	"cron": {
-		"*/5 * * * *": [
+		# Every minute: a paid prompt should show on the till within a minute, not five.
+		# Each request backs off on its own (stk.retry_after_seconds).
+		"* * * * *": [
 			"royce_payments.daraja.tasks.recover_pending",
 		],
 	},

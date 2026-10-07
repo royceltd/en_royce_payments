@@ -83,7 +83,9 @@ def stk_result(**kwargs):
 		}
 	)
 	if request.status in ("Pending", "Needs Review"):
-		request.db_set("status", "Verifying")
+		# Opt-in per Daraja Account: a paid POS prompt counts at the till right away. It is
+		# still confirmed (verify), and flagged if Safaricom's confirmation disagrees.
+		request.db_set("status", "Received" if stk.usable_on_callback(account, request, result) else "Verifying")
 		frappe.enqueue(
 			stk.verify, queue="short", name=name, enqueue_after_commit=True,
 			job_id=f"daraja-stk-verify-{name}", deduplicate=True,

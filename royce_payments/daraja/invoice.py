@@ -62,6 +62,10 @@ def _stk_row(r) -> dict:
 		"payer": "",
 		"time": r.transaction_time or r.creation,
 		"status": r.status,
+		# False for a prompt counted on Safaricom's result alone (Daraja Account opt-in),
+		# or one the customer paid that Safaricom hasn't confirmed yet.
+		"confirmed": bool(cint(r.verified)),
+		"paid": str(r.callback_result_code or "") == "0",
 	}
 
 
@@ -75,17 +79,35 @@ def _c2b_row(r) -> dict:
 		"payer": r.payer_name,
 		"time": r.trans_time,
 		"status": r.status,
+		"confirmed": bool(cint(r.get("verified"))),
+		"paid": True,
 	}
 
 
-STK_FIELDS = ["name", "mpesa_receipt", "amount", "phone", "transaction_time", "creation", "status"]
-C2B_FIELDS = ["name", "trans_id", "amount", "msisdn", "payer_name", "trans_time", "status"]
+STK_FIELDS = [
+	"name",
+	"mpesa_receipt",
+	"amount",
+	"phone",
+	"transaction_time",
+	"creation",
+	"status",
+	"verified",
+	"callback_result_code",
+]
+C2B_FIELDS = ["name", "trans_id", "amount", "msisdn", "payer_name", "trans_time", "status", "verified"]
 
 
 def applied(doctype: str, name: str) -> list[dict]:
 	"""Received payments applied to this invoice. These are what its M-Pesa amount stands for."""
 	linked = {"invoice_doctype": doctype, "invoice_name": name}
-	stk = frappe.get_all(STK, filters={**linked, "status": ["in", ["Received", "Paid"]]}, fields=STK_FIELDS)
+	# A prompt whose confirmation failed stops counting (submit is then refused); one that is
+	# Received but not yet confirmed counts only because its Daraja Account opted in.
+	stk = frappe.get_all(
+		STK,
+		filters={**linked, "status": ["in", ["Received", "Paid"]], "confirmation_failed": 0},
+		fields=STK_FIELDS,
+	)
 	c2b = frappe.get_all(
 		C2B,
 		filters={**linked, "verified": 1, "status": ["in", ["Needs Review", "Posted"]]},
@@ -119,7 +141,7 @@ def _free(rec) -> bool:
 	if rec.invoice_name or rec.payment_entry:
 		return False
 	if rec.doctype == STK:
-		return rec.status == "Received"
+		return rec.status == "Received" and not cint(rec.confirmation_failed)
 	return rec.status == "Needs Review" and cint(rec.verified)
 
 
@@ -172,6 +194,7 @@ def find_received(invoice_doctype: str, invoice_name: str, search: str | None = 
 		filters={
 			"daraja_account": ["in", accounts],
 			"status": "Received",
+			"confirmation_failed": 0,
 			"invoice_name": ["is", "not set"],
 			"creation": [">=", since],
 		},
@@ -284,9 +307,11 @@ def before_submit(doc, method=None):
 		)
 	if total > entered:
 		frappe.throw(
-			_("M-Pesa payments of {0} are applied to this invoice, but its M-Pesa amount is {1}.").format(
-				frappe.format(total, "Currency"), frappe.format(entered, "Currency")
-			)
+			_(
+				"M-Pesa payments of {0} are applied to this invoice, but its M-Pesa amount is {1}. "
+				"Reload the invoice to fill in the received amount, or set M-Pesa to {0}."
+			).format(frappe.format(total, "Currency"), frappe.format(entered, "Currency")),
+			title=_("M-Pesa amount doesn't match"),
 		)
 	if entered > total and any(modes[p.mode_of_payment] for p in rows if flt(p.amount)):
 		waiting = _(" A prompt is still waiting for the customer.") if pending(doc.doctype, doc.name) else ""

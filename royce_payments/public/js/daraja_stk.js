@@ -140,6 +140,14 @@ window.royce_payments_stk = {
 		);
 
 		const summary = await mpesa.summary(frm.doctype, frm.doc.name);
+		// Confirmed after the form stopped watching (reloaded, or Safaricom took a while):
+		// put it on the M-Pesa row now. Only when something was received, so an amount
+		// typed in by hand is never wiped.
+		const modes = Object.keys(summary.modes || {});
+		const row = (frm.doc.payments || []).find((p) => modes.includes(p.mode_of_payment));
+		if (row && summary.total && flt(row.amount) !== flt(summary.total)) {
+			await sync(summary);
+		}
 		if (summary.applied.length || summary.pending.length) {
 			const parts = summary.applied.map((r) => `${r.receipt} (${format_currency(r.amount, "KES")})`);
 			if (summary.pending.length) parts.push(__("{0} prompt(s) waiting", [summary.pending.length]));

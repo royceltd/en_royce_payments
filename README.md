@@ -23,6 +23,13 @@ By default (Daraja Account → *M-Pesa amounts on invoices must match payments r
 invoice cannot be submitted with an M-Pesa amount that Safaricom hasn't confirmed. This stops
 M-Pesa being keyed in for money that never arrived.
 
+Faster checkout is opt-in (Daraja Account → *POS: use M-Pesa prompts as soon as Safaricom
+reports them paid*). A paid prompt then counts at the till on Safaricom's result, which arrives
+in seconds, instead of after Safaricom's separate confirmation, which can take a minute or more.
+Confirmation still runs afterwards; if it disagrees or never comes, the payment is flagged
+(*Confirmation Failed*), the invoice gets a comment and Accounts Managers are notified.
+Till/Paybill payments always wait for confirmation.
+
 Design and security model: ADR-020 in the `royce_ip` repo. The short version: a callback
 from Safaricom is a claim, not proof. Nothing is posted until it is verified.
 

@@ -301,3 +301,80 @@ class TestSTKFlow(IntegrationTestCase):
 		pe = stk.post_reviewed(name, doc.customer, doc.name, "SISTK00003", confirmed_on_statement=1)
 		self.assertEqual(frappe.db.get_value("Payment Entry", pe, "reference_no"), "SISTK00003")
 		self.assertEqual(frappe.db.get_value("Daraja STK Request", name, "status"), "Paid")
+
+
+class TestUseCallbackAtTheTill(IntegrationTestCase):
+	"""Daraja Account opt-in (pos_use_callback): a paid POS prompt counts on Safaricom's result,
+	and is confirmed afterwards."""
+
+	def setUp(self):
+		_account().db_set("pos_use_callback", 1)
+
+	def tearDown(self):
+		_account().db_set("pos_use_callback", 0)
+
+	def _paid_callback(self, doc, amount, checkout_id, receipt, paid_amount=None):
+		name = _prompt(doc, amount, checkout_id)
+		token = _account().get_password("callback_token")
+		_call(callbacks.stk_result, token, _stk_callback(checkout_id, receipt, paid_amount or amount))
+		return name
+
+	def test_paid_prompt_counts_at_once_then_is_confirmed(self):
+		doc = _pos_invoice()
+		name = self._paid_callback(doc, 1000, "ws_CO_FAST_0001", "FASTPAY001")
+		request = frappe.get_doc("Daraja STK Request", name)
+		self.assertEqual((request.status, request.verified), ("Received", 0))
+
+		# The sale completes before Safaricom confirms.
+		_set_mpesa(doc, 1000)
+		doc.submit()
+		self.assertEqual(frappe.db.get_value("Daraja STK Request", name, "status"), "Paid")
+
+		confirmed = {"ResponseCode": "0", "ResultCode": "0", "ResultDesc": "ok"}
+		with patch("royce_payments.daraja.client.post", return_value=confirmed):
+			stk.verify(name)
+		request.reload()
+		self.assertEqual((request.status, request.verified, request.confirmation_failed), ("Paid", 1, 0))
+		self.assertFalse(frappe.db.exists("Payment Entry", {"reference_no": "FASTPAY001"}))
+
+	def test_safaricom_disagreeing_flags_it_and_tells_accounts_managers(self):
+		doc = _pos_invoice()
+		name = self._paid_callback(doc, 1000, "ws_CO_FAST_0002", "FASTPAY002")
+		_set_mpesa(doc, 1000)
+		doc.submit()
+
+		failed = {"ResponseCode": "0", "ResultCode": "1", "ResultDesc": "The balance is insufficient"}
+		with patch("royce_payments.daraja.client.post", return_value=failed):
+			stk.verify(name)
+		request = frappe.get_doc("Daraja STK Request", name)
+		self.assertTrue(request.confirmation_failed)
+		self.assertEqual(request.status, "Paid")  # the sale stands; a person decides
+		self.assertTrue(frappe.db.exists("Notification Log", {"document_name": name}))
+		self.assertTrue(
+			frappe.db.exists(
+				"Comment", {"reference_doctype": doc.doctype, "reference_name": doc.name, "content": ["like", "%FASTPAY002%"]}
+			)
+		)
+
+	def test_a_failed_confirmation_stops_counting_on_an_unsubmitted_sale(self):
+		doc = _pos_invoice()
+		name = self._paid_callback(doc, 1000, "ws_CO_FAST_0003", "FASTPAY003")
+		failed = {"ResponseCode": "0", "ResultCode": "1", "ResultDesc": "Failed"}
+		with patch("royce_payments.daraja.client.post", return_value=failed):
+			stk.verify(name)
+		_set_mpesa(doc, 1000)
+		self.assertRaisesRegex(frappe.ValidationError, "has been received", doc.submit)
+
+	def test_a_result_for_a_different_amount_waits_for_confirmation(self):
+		doc = _pos_invoice()
+		name = self._paid_callback(doc, 1000, "ws_CO_FAST_0004", "FASTPAY004", paid_amount=10)
+		self.assertEqual(frappe.db.get_value("Daraja STK Request", name, "status"), "Verifying")
+
+	def test_off_by_default_a_paid_prompt_waits_for_confirmation(self):
+		_account().db_set("pos_use_callback", 0)
+		doc = _pos_invoice()
+		name = self._paid_callback(doc, 1000, "ws_CO_FAST_0005", "FASTPAY005")
+		self.assertEqual(frappe.db.get_value("Daraja STK Request", name, "status"), "Verifying")
+		summary = invoice.get_summary(doc.doctype, doc.name)
+		self.assertEqual(summary["total"], 0)
+		self.assertTrue(summary["pending"][0]["paid"])  # shown as "Paid, confirming..."

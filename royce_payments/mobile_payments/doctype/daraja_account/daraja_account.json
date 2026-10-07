@@ -30,6 +30,7 @@
   "c2b_register_response",
   "pos_section",
   "pos_requires_received_payment",
+  "pos_use_callback",
   "callback_token",
   "callback_token_hash"
  ],
@@ -189,6 +190,13 @@
    "description": "On POS and other paid-at-sale invoices, the M-Pesa amount can only be entered by sending a prompt or picking a payment Safaricom has confirmed. Stops M-Pesa being typed in for money that never arrived."
   },
   {
+   "default": "0",
+   "fieldname": "pos_use_callback",
+   "fieldtype": "Check",
+   "label": "POS: use M-Pesa prompts as soon as Safaricom reports them paid",
+   "description": "Faster checkout. A prompt counts at the till the moment Safaricom's result arrives, instead of after the separate confirmation (which can take a minute or more). Confirmation still runs afterwards; if Safaricom ever contradicts the result, the payment is flagged and Accounts Managers are notified. Till/Paybill payments always wait for confirmation."
+  },
+  {
    "fieldname": "callback_token",
    "fieldtype": "Password",
    "hidden": 1,
@@ -208,7 +216,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-05 12:00:00.000000",
+ "modified": "2026-10-08 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Mobile Payments",
  "name": "Daraja Account",

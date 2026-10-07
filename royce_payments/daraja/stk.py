@@ -11,7 +11,7 @@ import re
 
 import frappe
 from frappe import _
-from frappe.utils import add_to_date, cint, now_datetime
+from frappe.utils import add_to_date, cint, flt, now_datetime
 
 from royce_payments.daraja import client, invoice, protocol
 from royce_payments.daraja.posting import check_sales_invoice, outstanding_for, post_or_review
@@ -145,7 +145,11 @@ def verify(name: str) -> None:
 	"""Confirm an STK request with STK Push Query, then post it. Safe to run repeatedly."""
 	frappe.set_user("Administrator")
 	request = frappe.get_doc("Daraja STK Request", name, for_update=True)
-	if request.status in FINAL_STATUSES or not request.checkout_request_id:
+	# In use on Safaricom's result alone (usable_on_callback), and not confirmed yet.
+	provisional = request.status in ("Received", "Paid") and not cint(request.verified)
+	if not request.checkout_request_id or cint(request.confirmation_failed):
+		return
+	if request.status in FINAL_STATUSES and not provisional:
 		return
 	account = frappe.get_doc("Daraja Account", request.daraja_account)
 
@@ -163,18 +167,30 @@ def verify(name: str) -> None:
 		if e.code == protocol.STK_STILL_PROCESSING and attempts < MAX_VERIFY_ATTEMPTS:
 			request.db_set("verify_attempts", attempts)
 			return
+		if provisional:
+			if attempts >= MAX_VERIFY_ATTEMPTS:
+				_flag_unconfirmed(request, _("Safaricom never confirmed this payment: {0}").format(e))
+			else:
+				request.db_set({"verify_attempts": attempts, "result_desc": str(e)[:1000]})
+			return
 		status = "Needs Review" if attempts >= MAX_VERIFY_ATTEMPTS else request.status
 		request.db_set({"verify_attempts": attempts, "status": status, "result_desc": str(e)[:1000]})
 		return
 
 	code = cint(result.get("ResultCode", -1))
 	desc = result.get("ResultDesc") or ""
+	if code != 0 and provisional:
+		request.db_set({"verify_attempts": attempts, "result_code": code})
+		_flag_unconfirmed(request, _("Safaricom's confirmation says this payment did not go through: {0}").format(desc))
+		return
 	if code != 0:
 		status = "Cancelled" if code == protocol.STK_CANCELLED_BY_USER else "Failed"
 		request.db_set({"verify_attempts": attempts, "status": status, "result_code": code, "result_desc": desc})
 		return
 
 	request.db_set({"verify_attempts": attempts, "result_code": 0, "result_desc": desc, "verified": 1})
+	if provisional:
+		return  # Already on the invoice; now confirmed too.
 	if not request.mpesa_receipt:
 		# Paid, but the receipt only comes in the callback, which hasn't arrived. The
 		# callback, or a person, finishes this.
@@ -183,6 +199,63 @@ def verify(name: str) -> None:
 		return
 
 	_post(request, account)
+
+
+def usable_on_callback(account, request, result) -> bool:
+	"""Opt-in per Daraja Account (pos_use_callback): may a paid POS prompt count at the till on
+	Safaricom's result alone, before verify() confirms it?
+
+	Only STK, only for POS invoices, and only a result that names a receipt and exactly the
+	amount we asked for. Forging one needs the callback token *and* the CheckoutRequestID
+	Safaricom issued only to us, for a prompt that is open right now. Till/Paybill payments
+	have no such second secret, so they always wait for confirmation."""
+	return bool(
+		cint(account.pos_use_callback)
+		and request.settlement == "Invoice"
+		and result.result_code == 0
+		and result.receipt
+		and result.amount is not None
+		and flt(result.amount) == flt(request.amount)
+	)
+
+
+def _flag_unconfirmed(request, reason: str) -> None:
+	"""A payment already used at the till that Safaricom did not confirm: keep it where it is
+	(the sale may be done), but make sure a person looks at it."""
+	request.db_set({"confirmation_failed": 1, "result_desc": reason[:1000]})
+	subject = _("M-Pesa {0} ({1}) not confirmed by Safaricom").format(
+		request.mpesa_receipt or request.name, frappe.format(request.amount, "Currency")
+	)
+	if request.invoice_name:
+		frappe.get_doc(request.invoice_doctype, request.invoice_name).add_comment(
+			"Comment", _("{0}. {1} Check the M-Pesa statement.").format(subject, reason)
+		)
+	company = frappe.db.get_value("Daraja Account", request.daraja_account, "company")
+	for user in accounts_managers(company):
+		frappe.get_doc(
+			{
+				"doctype": "Notification Log",
+				"for_user": user,
+				"type": "Alert",
+				"subject": subject,
+				"email_content": reason,
+				"document_type": "Daraja STK Request",
+				"document_name": request.name,
+			}
+		).insert(ignore_permissions=True)
+
+
+def accounts_managers(company: str) -> list[str]:
+	users = frappe.get_all(
+		"Has Role", filters={"role": "Accounts Manager", "parenttype": "User"}, pluck="parent", distinct=True
+	)
+	return [
+		u
+		for u in users
+		if u not in ("Administrator", "Guest")
+		and frappe.db.get_value("User", u, "enabled")
+		and frappe.has_permission("Company", "read", company, user=u)
+	] or ["Administrator"]
 
 
 def _post(request, account) -> None:
@@ -267,17 +340,43 @@ def post_reviewed(
 	return pe
 
 
+def retry_after_seconds(attempts: int) -> int:
+	"""How long to leave a request alone after its last check: 30s, 1, 2, 4, then every 5 min.
+
+	Safaricom's STK Push Query often says "still processing" for a while after the callback,
+	and rate-limits hard (HTTP 429), so asking again at once only gets refused."""
+	return min(30 * 2 ** max(cint(attempts), 0), 300)
+
+
 def recover_pending() -> None:
-	"""Scheduler: resolve STK requests whose callback never came."""
+	"""Scheduler (every minute): confirm STK requests that are still open, each on its own back-off."""
+	now = now_datetime()
 	stale = frappe.get_all(
 		"Daraja STK Request",
 		filters={
 			"status": ["in", ["Pending", "Verifying"]],
 			"checkout_request_id": ["is", "set"],
-			"modified": ["<", add_to_date(now_datetime(), seconds=-90)],
-			"creation": [">", add_to_date(now_datetime(), days=-2)],
+			"modified": ["<", add_to_date(now, seconds=-retry_after_seconds(0))],
+			"creation": [">", add_to_date(now, days=-2)],
 		},
-		pluck="name",
+		fields=["name", "modified", "verify_attempts"],
 	)
-	for name in stale:
-		frappe.enqueue(verify, queue="short", name=name, job_id=f"daraja-stk-verify-{name}", deduplicate=True)
+	# Used at the till on Safaricom's result alone, still to be confirmed.
+	stale += frappe.get_all(
+		"Daraja STK Request",
+		filters={
+			"status": ["in", ["Received", "Paid"]],
+			"verified": 0,
+			"confirmation_failed": 0,
+			"checkout_request_id": ["is", "set"],
+			"modified": ["<", add_to_date(now, seconds=-retry_after_seconds(0))],
+			"creation": [">", add_to_date(now, days=-2)],
+		},
+		fields=["name", "modified", "verify_attempts"],
+	)
+	for row in stale:
+		if row.modified > add_to_date(now, seconds=-retry_after_seconds(row.verify_attempts)):
+			continue
+		frappe.enqueue(
+			verify, queue="short", name=row.name, job_id=f"daraja-stk-verify-{row.name}", deduplicate=True
+		)
