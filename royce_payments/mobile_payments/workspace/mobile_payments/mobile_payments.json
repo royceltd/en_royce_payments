@@ -1,7 +1,7 @@
 {
  "app": "royce_payments",
  "charts": [],
- "content": "[{\"id\": \"rp-header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Mobile Payments</b></span>\", \"col\": 12}}, {\"id\": \"rp-para\", \"type\": \"paragraph\", \"data\": {\"text\": \"M-Pesa through Safaricom Daraja: STK Push on Sales Invoices and Sales Orders, and Paybill/Till payments verified with Safaricom before they are posted.\", \"col\": 12}}, {\"id\": \"rp-spacer\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-sc-c2b\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Paybill/Till Payments\", \"col\": 4}}, {\"id\": \"rp-sc-stk\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"STK Push Requests\", \"col\": 4}}, {\"id\": \"rp-sc-acc\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Daraja Account\", \"col\": 4}}, {\"id\": \"rp-spacer-2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-card-mpesa\", \"type\": \"card\", \"data\": {\"card_name\": \"M-Pesa\", \"col\": 4}}, {\"id\": \"rp-card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
+ "content": "[{\"id\": \"rp-header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Mobile Payments</b></span>\", \"col\": 12}}, {\"id\": \"rp-para\", \"type\": \"paragraph\", \"data\": {\"text\": \"M-Pesa through Safaricom Daraja: STK Push on Sales Invoices and Sales Orders, and Paybill/Till payments verified with Safaricom before they are posted.\", \"col\": 12}}, {\"id\": \"rp-spacer\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-numcard-review\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"M-Pesa Payments to Review\", \"col\": 4}}, {\"id\": \"rp-spacer-2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rp-card-mpesa\", \"type\": \"card\", \"data\": {\"card_name\": \"M-Pesa\", \"col\": 4}}, {\"id\": \"rp-card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
  "creation": "2026-09-26 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -25,7 +25,7 @@
    "description": "Payments made to your Paybill/Till. Needs Review ones wait for a person.",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Daraja C2B Payment",
+   "label": "Paybill/Till Payments",
    "link_count": 0,
    "link_to": "Daraja C2B Payment",
    "link_type": "DocType",
@@ -36,7 +36,7 @@
    "description": "PIN prompts sent from Sales Invoices and Sales Orders.",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Daraja STK Request",
+   "label": "STK Push Requests",
    "link_count": 0,
    "link_to": "Daraja STK Request",
    "link_type": "DocType",
@@ -63,43 +63,21 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-26 01:00:00.000000",
+ "modified": "2026-10-22 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Mobile Payments",
  "name": "Mobile Payments",
- "number_cards": [],
+ "number_cards": [
+  {
+   "number_card_name": "M-Pesa Payments to Review"
+  }
+ ],
  "owner": "Administrator",
  "parent_page": "",
  "public": 1,
  "quick_lists": [],
  "roles": [],
  "sequence_id": 1.0,
- "shortcuts": [
-  {
-   "color": "Grey",
-   "doc_view": "",
-   "format": "{} Needs Review",
-   "label": "Paybill/Till Payments",
-   "link_to": "Daraja C2B Payment",
-   "stats_filter": "{\"status\":\"Needs Review\"}",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "",
-   "label": "STK Push Requests",
-   "link_to": "Daraja STK Request",
-   "stats_filter": "{}",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "",
-   "label": "Daraja Account",
-   "link_to": "Daraja Account",
-   "stats_filter": "{}",
-   "type": "DocType"
-  }
- ],
+ "shortcuts": [],
  "title": "Mobile Payments"
 }

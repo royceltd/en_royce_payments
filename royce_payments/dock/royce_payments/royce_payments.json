@@ -1,0 +1,24 @@
+{
+ "app": "royce_payments",
+ "creation": "2026-10-22 10:00:00",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "wallet-soft",
+   "link_to": "Mobile Payments",
+   "link_type": "Sidebar",
+   "title": "Mobile Payments"
+  }
+ ],
+ "modified": "2026-10-22 10:00:00.000000",
+ "modified_by": "Administrator",
+ "mount_on": "erpnext",
+ "name": "royce_payments",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}
