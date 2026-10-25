@@ -13,7 +13,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from royce_payments.daraja import callbacks, invoice, posting, stk
-from royce_payments.daraja.test_daraja import COMPANY, _account, _call, _company, _customer
+from royce_payments.daraja.test_daraja import COMPANY, _account, _call, _company, _customer, _price_list
 
 ITEM = "_Test Mobile Payments Service"
 POS_PROFILE = "_Test Mobile Payments POS"
@@ -60,6 +60,7 @@ def _pos_profile():
 				"write_off_limit": 1,
 				"update_stock": 0,
 				"payments": [{"mode_of_payment": "M-Pesa", "default": 1}],
+				"selling_price_list": _price_list(),
 			}
 		).insert()
 	return POS_PROFILE
@@ -74,6 +75,7 @@ def _pos_invoice(rate=1000):
 			"company": COMPANY,
 			"customer": _customer(),
 			"currency": "KES",
+			"selling_price_list": _price_list(),
 			"is_pos": 1,
 			"pos_profile": _pos_profile(),
 			"update_stock": 0,
@@ -244,6 +246,7 @@ class TestSTKFlow(IntegrationTestCase):
 				"company": COMPANY,
 				"customer": _customer(),
 				"currency": "KES",
+				"selling_price_list": _price_list(),
 				"items": [{"item_code": ITEM, "qty": 1, "rate": 2000}],
 			}
 		)

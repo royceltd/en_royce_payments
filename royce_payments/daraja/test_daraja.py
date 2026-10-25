@@ -33,6 +33,7 @@ def _company():
 				"create_chart_of_accounts_based_on": "Standard Template",
 			}
 		).insert()
+	_fiscal_year()
 	ledger = frappe.db.get_value("Account", {"company": COMPANY, "account_name": "M-Pesa Test"}, "name")
 	if not ledger:
 		parent = frappe.db.get_value("Account", {"company": COMPANY, "account_type": "Bank", "is_group": 1}, "name")
@@ -51,6 +52,33 @@ def _company():
 			.name
 		)
 	return ledger
+
+
+def _fiscal_year():
+	"""Our own Fiscal Year for today. A shared test site may only have fiscal years
+	restricted to other test companies (kenyan_accountant's), and then every posting fails."""
+	from erpnext.accounts.utils import get_fiscal_year
+
+	today = frappe.utils.getdate()
+	if get_fiscal_year(today, company=COMPANY, raise_on_missing=False):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Fiscal Year",
+			"year": f"_Test Mobile Payments FY {today.year}",
+			"year_start_date": f"{today.year}-01-01",
+			"year_end_date": f"{today.year}-12-31",
+			"companies": [{"company": COMPANY}],
+		}
+	).insert()
+
+
+def _price_list():
+	"""Sales Invoice requires one; a site that never ran the setup wizard has none."""
+	name = "_Test Mobile Payments Selling"
+	if not frappe.db.exists("Price List", name):
+		frappe.get_doc({"doctype": "Price List", "price_list_name": name, "selling": 1, "currency": "KES"}).insert()
+	return name
 
 
 def _customer(name="_Test Daraja Customer"):
